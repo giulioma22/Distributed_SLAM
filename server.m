@@ -13,6 +13,7 @@ while (1)
     plot(data_read);
     hold on
     drawnow
+    
 
     % Send data if needed
     
