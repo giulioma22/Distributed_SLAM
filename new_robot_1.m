@@ -13,49 +13,102 @@ addpath('C:\Users\giuli\OneDrive\Desktop\EIT Trento\Distributed_Systems\MatLab\S
 R = 0.1;                        % Wheel radius [m]
 L = 0.5;                        % Wheelbase [m]
 % Sample time and time array
-sampleTime = 0.3;              % Sample time [s]
+sampleTime = 0.5;              % Sample time [s]
 tVec = 0:sampleTime:45;        % Time array
 % Initial conditions
 % initPose = [2;2;0];            % Initial pose (x y theta)
-initPose = [1;1;0];
+% initPose = [1;1;0];
 pose = zeros(3,numel(tVec));   % Pose matrix
-pose(:,1) = initPose;
+% pose(:,1) = initPose;
 % Load map
 close all
 load exampleMap
 % Create lidar sensor
 lidar = LidarSensor;
 lidar.sensorOffset = [0,0];
-lidar.scanAngles = linspace(-1.5*pi/2,1.5*pi/2,100);
+lidar.scanAngles = linspace(-1.5*pi/2,1.5*pi/2,150);
 %lidar.scanAngles = linspace(-pi/2,pi/2,101);
-lidar.maxRange = 8;%5 orig
+lidar.maxRange = 5;     %5 orig
 % Create visualizer
 viz = Visualizer2D;
 viz.hasWaypoints = true;
 viz.mapName = 'map';
 attachLidarSensor(viz,lidar);
-%% Path planning and following
-% Create waypoints
-% waypoints = [initPose(1:2)'; 
-%              2 10;
-%              11 8;
-%              8 2];
-waypoints = [1 1; 
-             3 3;
-             3 9;
-             9 9;
-             9 3];
-         
-% Bool map of checked points
-numPoints = 5;
-table = [1 2];
+
+%% Grids parameters
+
+% Points per area
+WAYPOINT_LEN = 5;
+offset = 1.5;
+
+% Grid dimensions
+grid_1 = [0+offset 6-offset; 0+offset 6-offset];
+grid_2 = [0+offset 6-offset; 6+offset 12-offset];
+grid_3 = [6+offset 12-offset; 6+offset 12-offset];
+grid_4 = [6+offset 12-offset; 0+offset 6-offset];
+
+% gridsArray = [grid_1; grid_2; grid_3; grid_4];
+wayPointsArray = [];
+numberOfGrids = 4;
+   
+% Sample random point for ALL areas
+for j = 1:numberOfGrids
+    
+    waypoint_1 = zeros(WAYPOINT_LEN,2);
+    k = 1;
+    D = 0;
+    
+    if j == 1
+       grid = grid_1;
+    elseif j == 2
+       grid = grid_2;
+    elseif j == 3
+       grid = grid_3;
+    elseif j == 4
+       grid = grid_4;
+    end
+    
+    while k <= WAYPOINT_LEN
+        
+        random_x = grid(1,1) + (grid(1,2)-grid(1,1)) .* rand(1,1);
+        random_y = grid(2,1) + (grid(2,2)-grid(2,1)) .* rand(1,1);
+
+        waypoint_1(k,1) = random_x;
+        waypoint_1(k,2) = random_y;
+        %disp(waypoint_1)
+        if k < 3
+            k = k+1;
+        else
+            D = pdist2(waypoint_1(k,:), waypoint_1(k-1,:));
+            if D > 1.8
+                k = k+1;
+            end
+        end   
+    end
+    
+    wayPointsArray = [wayPointsArray waypoint_1];
+    
+end
+
+%% Current grid
+
+currGrid = 1;
+
+% Select waypoints of current grid
+waypoints = wayPointsArray(:, (currGrid*2)-1:currGrid*2);
+pose(:,1) = [waypoints(1,1); waypoints(1,2); 0];
+
+% First goal is point 2
 wayPoint_idx = 2;
-% boolMap = [1 0 0 1 0];
-% wayPoint_idx = 4;
+
+% Areas already seen
+table = [currGrid];
+
+%% Planning Parameters
 
 % Pure Pursuit Controller
 controller = controllerPurePursuit;
-controller.Waypoints = waypoints(wayPoint_idx,:);
+controller.Waypoints = waypoints(1,:);
 controller.LookaheadDistance = 0.5;
 controller.DesiredLinearVelocity = 0.75;
 controller.MaxAngularVelocity = 1.5;
@@ -66,7 +119,7 @@ vfh.NumAngularSectors = 36;
 vfh.HistogramThresholds = [5 10];
 vfh.RobotRadius = L;
 vfh.SafetyDistance = L;
-vfh.MinTurningRadius = 0.15;%0.25 orig
+vfh.MinTurningRadius = 0.15;    %0.25 orig
 
 N_SCANS=numel(tVec) ;        
 cell_scan=cell(1,N_SCANS);
@@ -84,8 +137,8 @@ title('Lidar Mapping');
 %% Simulation loop
 
 SLAM_completed = false;
+minDistance = 1.8;
 idx = 1;
-% r = rateControl(1/sampleTime);
 otherRobotDone = false;
 
 while (~SLAM_completed)
@@ -133,24 +186,32 @@ while (~SLAM_completed)
     distance = sqrt((pose(1,idx) - waypoints(wayPoint_idx,1))^2 + (pose(2,idx) - waypoints(wayPoint_idx,2))^2);
     
     % Check if reached waypoint
-    if (distance < 0.6)
-        fprintf("\n\nREACHED Waypoint\n\n");
-        if (otherRobotDone)
-            break
-        end
-        % New waypoint (only if 0)
-        for i = 2:numPoints
-            % If NOT checked
-            if (int8(ismember(i, table)) == 0)
-                isCellOccupied = i;
+    if (distance < minDistance)
+        fprintf("\n\nReached Waypoint\n\n");
+        % If last point in area
+        if (wayPoint_idx == WAYPOINT_LEN)
+            if (otherRobotDone)
                 break
-            % If ALL already checked
-            elseif (i == numPoints && int8(ismember(i, table)) == 1)
-                isCellOccupied = numPoints + 1;
             end
+            % New waypoint (only if 0)
+            for i = 2:numberOfGrids
+                % If NOT checked
+                if (int8(ismember(i, table)) == 0)  % False (not in table)
+                    isCellOccupied = i;
+                    break
+                % If ALL already checked
+                elseif (i == numberOfGrids && int8(ismember(i, table)) == 1)
+                    isCellOccupied = numberOfGrids + 1;
+                end
+            end
+        else
+           % Go to next random point
+           isCellOccupied = -1;
+           wayPoint_idx = wayPoint_idx + 1;
+           controller.Waypoints = waypoints(wayPoint_idx,:);
         end
     else
-       isCellOccupied = -1; 
+        isCellOccupied = -1;
     end
     
     if (SLAM_completed)
@@ -165,18 +226,14 @@ while (~SLAM_completed)
 
         % Exit loop iff no pending response
         waiting_for_answer = false;
-        if (isCellOccupied > 1 && isCellOccupied <= numel(waypoints))
+        if (isCellOccupied > 1 && isCellOccupied <= numberOfGrids)
            waiting_for_answer = true; 
         end
 
         %% Receive server flag
         server_call = tcpip('localhost', 11110, 'NetworkRole', 'client');
-%         fopen(server_call);
-%         while (server_call.BytesAvailable == 0)
-%         end
-%         server_flag = fread(server_call, server_call.BytesAvailable, 'int8');
-%         fclose(server_call);
         
+        % Wait for connection w/ server
         isOpened = false;
         while(~isOpened)
             isOpened = true;
@@ -210,7 +267,7 @@ while (~SLAM_completed)
                 fprintf("No request (-1)\n");
             % 1.2) Make request
             else
-                if (isCellOccupied > numPoints)
+                if (isCellOccupied > numberOfGrids)
                     message = -2;
                     waiting_for_answer = false;
                     fprintf("Turning off... (%d)\n", message);
@@ -228,14 +285,15 @@ while (~SLAM_completed)
             if (server_flag == 0)   
                 message = -1;
                 waiting_for_answer = false;
-                wayPoint_idx = isCellOccupied;
-                controller.Waypoints = waypoints(isCellOccupied,:);
+                wayPoint_idx = 1;
+                waypoints = wayPointsArray(:, (isCellOccupied*2)-1:isCellOccupied*2);
+                controller.Waypoints = waypoints(wayPoint_idx,:);
                 fprintf("No new request (%d)\n", message);
             % 2.2) Already scanned
             else                    
                 isCellOccupied = isCellOccupied + 1;
                 % 2.2.1) Break if all waypoints were checked -- EXIT Condition
-                if (isCellOccupied > numPoints)
+                if (isCellOccupied > numberOfGrids)
                     message = -2;
                     waiting_for_answer = false;
                     SLAM_completed = true;
@@ -251,9 +309,10 @@ while (~SLAM_completed)
         else                            
             fprintf("Request from other client (%d)\n", server_flag);
             message = int8(ismember(server_flag, table)); 
-            fprintf("Answer to client 1 (%d)\n", message);
+            fprintf("Answer to client 2 (%d)\n", message);
         end
 
+        % Send message to server
         data_send = tcpip('localhost', 11111, 'NetworkRole', 'client');
         fopen(data_send);
         fwrite(data_send, message, 'int8');
