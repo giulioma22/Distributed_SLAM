@@ -6,14 +6,14 @@ close all;
 
 %% Simulation setup
 
-% addpath('D:\UniTn\distributed automation\Project\mathworks-robotics-mobile-robotics-simulation-toolbox-2.2-2-g7066fa0\mathworks-robotics-mobile-robotics-simulation-toolbox-7066fa0\src\environment')
+%addpath('D:\UniTn\distributed automation\Project\mathworks-robotics-mobile-robotics-simulation-toolbox-2.2-2-g7066fa0\mathworks-robotics-mobile-robotics-simulation-toolbox-7066fa0\src\environment')
 addpath('C:\Users\giuli\OneDrive\Desktop\EIT Trento\Distributed_Systems\MatLab\SLAM_Project\Robotics_Toolbox\src\environment')
 
 % Define Vehicle
 R = 0.1;                        % Wheel radius [m]
 L = 0.5;                        % Wheelbase [m]
 % Sample time and time array
-sampleTime = 0.5;              % Sample time [s]
+sampleTime = 0.3;              % Sample time [s]
 tVec = 0:sampleTime:45;        % Time array
 % Initial conditions
 % initPose = [2;2;0];            % Initial pose (x y theta)
@@ -39,13 +39,13 @@ attachLidarSensor(viz,lidar);
 
 % Points per area
 WAYPOINT_LEN = 5;
-offset = 1.5;
-
+offsetX = 2.5;
+offsetY = 1.0;
 % Grid dimensions
-grid_1 = [0+offset 6-offset; 0+offset 6-offset];
-grid_2 = [0+offset 6-offset; 6+offset 12-offset];
-grid_3 = [6+offset 12-offset; 6+offset 12-offset];
-grid_4 = [6+offset 12-offset; 0+offset 6-offset];
+grid_1 = [0+offsetX 6-offsetX; 0+offsetY 6-offsetY];
+grid_2 = [0+offsetX 6-offsetX; 6+offsetY 12-offsetY];
+grid_3 = [6+offsetX 12-offsetX; 6+offsetY 12-offsetY];
+grid_4 = [6+offsetX 12-offsetX; 0+offsetY 6-offsetY];
 
 % gridsArray = [grid_1; grid_2; grid_3; grid_4];
 wayPointsArray = [];
